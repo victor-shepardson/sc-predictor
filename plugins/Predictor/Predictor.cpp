@@ -29,18 +29,25 @@ Predictor::~Predictor() {
     RTFree(this->mWorld, parameters);
 }
 
-// idea: dropout for longer horizon with fixed cost.
+//idea: rollouts to predict N samples ahead
+
+//idea: hallucination mode, feeding the last prediction instead of the input
+// needs some amplitude stabilization
+
+//idea: probabilistic version so error is a proper measure of surprise
+
+//idea: dropout for longer horizon with fixed cost.
 // keep array of indices of size ACTIVE_FEATURES << FEATURE_SIZE
 // mutate this array with PRNG while iterating over it in predict
-
 // better idea is probably to use IIR features ?
 
-// idea: polyphase filter and multidimensional target, lower rate prediction
+//idea: polyphase filter and multidimensional target, lower rate prediction
 
 void Predictor::next(int nSamples) {
     const float* input = in(0);
     const float* learning_rate = in(1);
     const float* l1_penalty = in(2);
+    const float* hallucinate = in(3);
 
     float* outbuf = out(0);
 
@@ -50,14 +57,23 @@ void Predictor::next(int nSamples) {
     // to be kept to run the update later once target is available.
     // or could do: compute param update; do feat update; do predict; apply param update
     for (int i=0; i < nSamples; ++i) {
-        // float target = input[i];
-        float target = input[i] - last; // predict delta
+        float inp = input[i];
+        float halluc = hallucinate[i];
 
         auto pred = predict();
+
+        // if hallucinating, replace input with prediction
+        inp += halluc*(pred+last-inp); 
+
+        // float target = inp;
+        float target = inp - last; // predict delta
+
         auto err = update_parameters(
             pred, target, learning_rate[i], l1_penalty[i]);
-        outbuf[i] = pred + last;
-        last = input[i];
+        // outbuf[i] = pred;
+        outbuf[i] = pred + last; // predicting delta
+
+        last = inp;
         update_features(target);
     }
 }

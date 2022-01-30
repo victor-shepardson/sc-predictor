@@ -7,7 +7,7 @@
 
 namespace Predictor {
 
-const size_t FEATURE_SIZE = 256;
+const size_t FEATURE_SIZE = 512;
 const size_t PARAM_SIZE = FEATURE_SIZE;
 
 class Predictor : public SCUnit {
