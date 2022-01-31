@@ -29,16 +29,24 @@ Predictor::~Predictor() {
     RTFree(this->mWorld, parameters);
 }
 
+// TODO: move feature size to constructor
+
 //idea: rollouts to predict N samples ahead
 
-//idea: hallucination mode, feeding the last prediction instead of the input
+//idea: hallucination mode, feeding the last prediction instead of the input.
 // needs some amplitude stabilization
+
+//idea: sparsity output. 1 - max(abs(weight)) / median(abs(weight))
+// https://rcoh.me/posts/linear-time-median-finding/
+// or gini-like max / mean
+
+//idea: index of biggest +/- features ("significant wavelengths")
 
 //idea: probabilistic version so error is a proper measure of surprise
 
 //idea: dropout for longer horizon with fixed cost.
 // keep array of indices of size ACTIVE_FEATURES << FEATURE_SIZE
-// mutate this array with PRNG while iterating over it in predict
+// mutate this array with PRNG while iterating over it in `predict`?
 // better idea is probably to use IIR features ?
 
 //idea: polyphase filter and multidimensional target, lower rate prediction
