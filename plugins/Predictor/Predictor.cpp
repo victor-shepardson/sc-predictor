@@ -12,6 +12,11 @@ static InterfaceTable* ft;
 
 namespace Predictor {
 
+// from https://stackoverflow.com/questions/1903954/is-there-a-standard-sign-function-signum-sgn-in-c-c
+template <typename T> int sgn(T val) {
+    return (T(0) < val) - (val < T(0));
+}
+
 Predictor::Predictor() {
     last = 0.0f;
     ring_ptr = 0;
@@ -29,16 +34,16 @@ Predictor::~Predictor() {
     RTFree(this->mWorld, parameters);
 }
 
+//idea: "running hallucination" / "resonator output":
+// maintain a parallel feature vector and compute a feedback output from it,
+// as with halluc=1, but keep training on the real input
+
 // TODO: move feature size to constructor
 
 //idea: rollouts to predict N samples ahead
 
 //idea: hallucination mode, feeding the last prediction instead of the input.
 // needs some amplitude stabilization
-
-//idea: sparsity output. 1 - max(abs(weight)) / median(abs(weight))
-// https://rcoh.me/posts/linear-time-median-finding/
-// or gini-like max / mean
 
 //idea: index of biggest +/- features ("significant wavelengths")
 
@@ -57,7 +62,10 @@ void Predictor::next(int nSamples) {
     const float* l1_penalty = in(2);
     const float* hallucinate = in(3);
 
-    float* outbuf = out(0);
+    float* prediction = out(0);
+    float* residual = out(1);
+    float* sparsity = out(2);
+    float* max_index = out(3);
 
     // note: this doesn't actually predict ahead and is only good for measuring
     // prediction error.
@@ -68,18 +76,23 @@ void Predictor::next(int nSamples) {
         float inp = input[i];
         float halluc = hallucinate[i];
 
-        auto pred = predict();
+        auto raw_pred = predict();
+        auto pred = raw_pred + last; // predicting delta
 
         // if hallucinating, replace input with prediction
-        inp += halluc*(pred+last-inp); 
+        inp += halluc*(pred-inp); 
 
-        // float target = inp;
         float target = inp - last; // predict delta
 
-        auto err = update_parameters(
-            pred, target, learning_rate[i], l1_penalty[i]);
-        // outbuf[i] = pred;
-        outbuf[i] = pred + last; // predicting delta
+        float spars, idx;
+        update_parameters(
+            raw_pred, target, learning_rate[i], l1_penalty[i],
+            spars, idx);
+
+        prediction[i] = pred;
+        residual[i] = inp - pred; 
+        sparsity[i] = spars;
+        max_index[i] = idx;
 
         last = inp;
         update_features(target);
@@ -102,18 +115,33 @@ void Predictor::update_features(float x) {
     ring_ptr = (ring_ptr+1) % FEATURE_SIZE;
 }
 
-float Predictor::update_parameters(float pred, float target, float lr, float reg) {
+void Predictor::update_parameters(
+        float pred, float target, float lr, float reg,
+        float &spars, float &idx) {
     auto err = (pred-target);
+    float max_p = 0;
+    float sum_p = 0;
+    float max_idx = 0;
 
     for (size_t param_idx=0; param_idx<FEATURE_SIZE; param_idx++){
         auto feat_idx = (param_idx+ring_ptr)%FEATURE_SIZE;
+        auto p = parameters[param_idx];
         parameters[param_idx] -= lr*(
             2*features[feat_idx]*err // minimize error
-            + float(parameters[param_idx] > 0)*reg // weight decay
+            + sgn(p)*reg // weight decay
             );
+        float abs_p = fabs(parameters[param_idx]);
+        if (abs_p > max_p) {
+            max_p = abs_p;
+            max_idx = param_idx;
+        }
+        // max_p = fmax(max_p, abs_p);
+        sum_p += abs_p;
     }
 
-    return err*err;
+    // gini coefficient-like sparsity measure
+    spars = (max_p / sum_p * PARAM_SIZE - 1) / (PARAM_SIZE - 1);
+    idx = FEATURE_SIZE - max_idx;
 }
 
 } // namespace Predictor

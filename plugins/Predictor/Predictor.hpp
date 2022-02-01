@@ -24,7 +24,9 @@ private:
     void update_features(float x);
     float predict();
     // returns error
-    float update_parameters(float pred, float target, float lr, float reg);    
+    void update_parameters(
+        float pred, float target, float lr, float reg,
+        float &spars, float &idx);    
 
     // Member variables
     float* parameters;
