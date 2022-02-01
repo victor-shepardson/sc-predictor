@@ -12,6 +12,11 @@ static InterfaceTable* ft;
 
 namespace Predictor {
 
+// from https://stackoverflow.com/questions/1903954/is-there-a-standard-sign-function-signum-sgn-in-c-c
+template <typename T> int sgn(T val) {
+    return (T(0) < val) - (val < T(0));
+}
+
 Predictor::Predictor() {
     last = 0.0f;
     ring_ptr = 0;
@@ -109,7 +114,7 @@ float Predictor::update_parameters(float pred, float target, float lr, float reg
         auto feat_idx = (param_idx+ring_ptr)%FEATURE_SIZE;
         parameters[param_idx] -= lr*(
             2*features[feat_idx]*err // minimize error
-            + float(parameters[param_idx] > 0)*reg // weight decay
+            + sgn(parameters[param_idx])*reg // weight decay
             );
     }
 
