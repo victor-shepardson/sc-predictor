@@ -7,7 +7,7 @@
 
 namespace Predictor {
 
-const size_t FEATURE_SIZE = 512;
+const size_t FEATURE_SIZE = 1024;
 const size_t PARAM_SIZE = FEATURE_SIZE;
 
 class Predictor : public SCUnit {
@@ -24,7 +24,9 @@ private:
     void update_features(float x);
     float predict();
     // returns error
-    float update_parameters(float pred, float target, float lr, float reg);    
+    void update_parameters(
+        float pred, float target, float lr, float l1, float l2,
+        float &spars, float &idx);    
 
     // Member variables
     float* parameters;
