@@ -34,18 +34,21 @@ Predictor::~Predictor() {
     RTFree(this->mWorld, parameters);
 }
 
+// TODO: move feature size to constructor
+
+//idea: RNN reservoir feature
+
 //idea: "running hallucination" / "resonator output":
 // maintain a parallel feature vector and compute a feedback output from it,
 // as with halluc=1, but keep training on the real input
+// what would this do for feedback suppression? probably not much?
+// this signal would have effectively random phase and smeared spectrum?
 
-// TODO: move feature size to constructor
 
 //idea: rollouts to predict N samples ahead
 
 //idea: hallucination mode, feeding the last prediction instead of the input.
 // needs some amplitude stabilization
-
-//idea: index of biggest +/- features ("significant wavelengths")
 
 //idea: probabilistic version so error is a proper measure of surprise
 
@@ -60,7 +63,8 @@ void Predictor::next(int nSamples) {
     const float* input = in(0);
     const float* learning_rate = in(1);
     const float* l1_penalty = in(2);
-    const float* hallucinate = in(3);
+    const float* l2_penalty = in(3);
+    const float* hallucinate = in(4);
 
     float* prediction = out(0);
     float* residual = out(1);
@@ -86,7 +90,8 @@ void Predictor::next(int nSamples) {
 
         float spars, idx;
         update_parameters(
-            raw_pred, target, learning_rate[i], l1_penalty[i],
+            raw_pred, target, learning_rate[i], 
+            l1_penalty[i], l2_penalty[i],
             spars, idx);
 
         prediction[i] = pred;
@@ -110,30 +115,37 @@ float Predictor::predict() {
 
 void Predictor::update_features(float x) {
     // replace oldest with newest
-    features[ring_ptr] = x;
+    features[ring_ptr] = x / (1+fabs(x));
     // point to now-oldest
     ring_ptr = (ring_ptr+1) % FEATURE_SIZE;
 }
 
 void Predictor::update_parameters(
-        float pred, float target, float lr, float reg,
+        float pred, float target, float lr, float l1, float l2,
         float &spars, float &idx) {
     auto err = (pred-target);
     float max_p = 0;
     float sum_p = 0;
     float max_idx = 0;
 
+    const int min_delay = 32;
+
+    float abs_p;
+
     for (size_t param_idx=0; param_idx<FEATURE_SIZE; param_idx++){
         auto feat_idx = (param_idx+ring_ptr)%FEATURE_SIZE;
         auto p = parameters[param_idx];
         parameters[param_idx] -= lr*(
             2*features[feat_idx]*err // minimize error
-            + sgn(p)*reg // weight decay
+            + sgn(p)*l1 // weight decay
+            + p*l2
             );
-        float abs_p = fabs(parameters[param_idx]);
-        if (abs_p > max_p) {
-            max_p = abs_p;
-            max_idx = param_idx;
+        if (FEATURE_SIZE - param_idx >= min_delay){
+            abs_p = fabs(parameters[param_idx]);
+            if (abs_p > max_p) {
+                max_p = abs_p;
+                max_idx = param_idx;
+            }
         }
         // max_p = fmax(max_p, abs_p);
         sum_p += abs_p;

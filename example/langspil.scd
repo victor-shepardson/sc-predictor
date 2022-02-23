@@ -7,7 +7,7 @@ s.options.numInputBusChannels = 8;
 s.options.numOutputBusChannels = 8;
 s.options.sampleRate = 48000;
 s.options.blockSize = 16;
-s.boot
+s.boot;
 )
 
 ~pup_buses = [5,6,7];
@@ -21,14 +21,14 @@ s.boot
     var src = Mix.ar(SoundIn.ar(~pup_buses)) * \drive.kr(1, 0.1);
 
     var pred = Predictor.ar(src, K2A.ar(lr), K2A.ar(reg));
-    var err = (pred-src);
+    var err = (src-pred);
 
     Limiter.ar(Mix.ar([
         pred * \pred_gain.kr(0, 0.1),
         err * \err_gain.kr(0, 0.1)
     ]), \limit.kr(0.9, 0.1), 1e-3);
 
-}.play
+}.play(outbus:1)
 )
 
 //feedback suppression
@@ -84,7 +84,7 @@ s.boot
         err * \err_gain.kr([0,0,0], 0.1)
     ].flatten), \limit.kr(0.9, 0.1), 1e-3);
 
-}.play
+}.play(outbus:1)
 )
 
 // fb suppression for melody string only
@@ -113,12 +113,12 @@ s.boot
             \lpf.kr([10000,10000,10000], 0.1))
         * \pred_gain.kr([0,0,0], 0.1),
         err+CombC.ar(err, 10,
-            SampleDur.ir * 4 + \delay.kr([0,0,0], 1),
-            \decay.kr([0,0,0], 1))
+            SampleDur.ir * 4 + \delay.kr([1e-3,1e-3,1e-3], 1),
+            \decay.kr([1e-3,1e-3,1e-3], 1))
         * \err_gain.kr([0,0,0], 0.1)
     ].flatten), \limit.kr(0.9, 0.1), 1e-3);
 
-}.play
+}.play(outbus:1)
 )
 
 // shifters on the drone strings
@@ -146,6 +146,10 @@ s.boot
 ~synth.set(\delay, [0.59, 0.46, 0.3]);
 ~synth.set(\decay, [6, 8, 4]);
 )
+
+// idea: tie fb amplitude to err envelope
+
+
 
 ~synth.free
 
